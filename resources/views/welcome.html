@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Poverty Statistics API</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+          Cantarell, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+      .container {
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        max-width: 600px;
+        padding: 40px;
+      }
+      h1 {
+        color: #333;
+        margin-bottom: 20px;
+        font-size: 28px;
+      }
+      .subtitle {
+        color: #666;
+        margin-bottom: 30px;
+        font-size: 14px;
+      }
+      .endpoints {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+      }
+      .endpoint {
+        margin-bottom: 15px;
+        padding-bottom: 15px;
+        border-bottom: 1px solid #e0e0e0;
+      }
+      .endpoint:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+        padding-bottom: 0;
+      }
+      .method {
+        display: inline-block;
+        background: #667eea;
+        color: white;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-weight: bold;
+        margin-right: 8px;
+        font-size: 12px;
+      }
+      .path {
+        color: #333;
+        font-family: "Monaco", "Menlo", monospace;
+        font-size: 13px;
+        margin-bottom: 5px;
+      }
+      .description {
+        color: #666;
+        font-size: 13px;
+      }
+      .status {
+        background: #10b981;
+        color: white;
+        padding: 10px 20px;
+        border-radius: 6px;
+        text-align: center;
+        margin-top: 30px;
+        font-size: 14px;
+      }
+      .links {
+        text-align: center;
+        margin-top: 20px;
+      }
+      .links a {
+        color: #667eea;
+        text-decoration: none;
+        margin: 0 10px;
+        font-size: 14px;
+      }
+      .links a:hover {
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🇮🇩 Indonesian Poverty Statistics</h1>
+      <p class="subtitle">RESTful API for analyzing provincial poverty data</p>
+
+      <div class="endpoints">
+        <div class="endpoint">
+          <div class="path"><span class="method">GET</span>/api/provinces</div>
+          <div class="description">Get all provinces with statistics</div>
+        </div>
+
+        <div class="endpoint">
+          <div class="path">
+            <span class="method">GET</span>/api/provinces/{id}
+          </div>
+          <div class="description">Get specific province by ID</div>
+        </div>
+
+        <div class="endpoint">
+          <div class="path">
+            <span class="method">GET</span>/api/provinces/search?q=query
+          </div>
+          <div class="description">Search provinces by name</div>
+        </div>
+
+        <div class="endpoint">
+          <div class="path">
+            <span class="method">GET</span
+            >/api/provinces/top?semester=1&limit=10
+          </div>
+          <div class="description">Get top provinces by poverty level</div>
+        </div>
+
+        <div class="endpoint">
+          <div class="path">
+            <span class="method">GET</span>/api/statistics/summary
+          </div>
+          <div class="description">Get overall statistics summary</div>
+        </div>
+      </div>
+
+      <div class="status">✓ Application is running</div>
+
+      <div class="links">
+        <a href="/api/provinces">View Data</a> |
+        <a href="/api/statistics/summary">Statistics</a>
+      </div>
+    </div>
+  </body>
+</html>

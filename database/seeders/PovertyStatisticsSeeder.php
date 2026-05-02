@@ -1,0 +1,76 @@
+<?php
+
+namespace Database\Seeders;
+
+use Illuminate\Database\Seeder;
+use App\Models\Province;
+use App\Models\Semester;
+
+class PovertyStatisticsSeeder extends Seeder
+{
+    /**
+     * Run the database seeds.
+     */
+    public function run(): void
+    {
+        $data = [
+            ['Aceh', 676247, 715103, 56959],
+            ['Sumatera Utara', 666546, 718220, 159786],
+            ['Sumatera Barat', 729806, 776517, 59916],
+            ['Riau', 713117, 747345, 68924],
+            ['Jambi', 664127, 713849, 38117],
+            ['Sumatera Selatan', 581702, 609044, 90171],
+            ['Bengkulu', 683820, 712003, 21633],
+            ['Lampung', 612451, 634062, 96238],
+            ['Kepulauan Bangka Belitung', 956833, 992426, 15697],
+            ['Kepulauan Riau', 832410, 870738, 22431],
+            ['DKI Jakarta', 852768, 897768, 106697],
+            ['Jawa Barat', 547752, 575499, 511639],
+            ['Jawa Tengah', 537812, 570870, 38565],
+            ['DI. Yogyakarta', 626363, 649331, 38027],
+            ['Jawa Timur', 558029, 585020, 42352],
+            ['Banten', 684232, 715288, 126413],
+            ['Bali', 607847, 642986, 44882],
+            ['Nusa Tenggara Barat', 556846, 575856, 58153],
+            ['Nusa Tenggara Timur', 549607, 563052, 58286],
+            ['Kalimantan Barat', 622882, 652220, 5835],
+            ['Kalimantan Tengah', 654066, 683664, 28795],
+            ['Kalimantan Selatan', 650675, 684567, 43721],
+            ['Kalimantan Timur', 866193, 897759, 44784],
+            ['Kalimantan Utara', 884970, 933675, 7588],
+            ['Sulawesi Utara', 530304, 557310, 27405],
+            ['Sulawesi Tengah', 624854, 664691, 31898],
+            ['Sulawesi Selatan', 477966, 514958, 96613],
+            ['Sulawesi Tenggara', 488171, 519411, 288],
+            ['Gorontalo', 495576, 519640, 12564],
+            ['Sulawesi Barat', 475488, 510846, 15474],
+            ['Maluku', 757600, 797060, 19952],
+            ['Maluku Utara', 662397, 692592, 13917],
+            ['Papua Barat', 831001, 868631, 5965],
+            ['Papua', 714365, 736720, 10865],
+        ];
+
+        $year = 2025;
+
+        foreach ($data as [$provinceName, $semester1, $semester2, $population]) {
+            $province = Province::create([
+                'name' => $provinceName,
+                'population' => $population,
+            ]);
+
+            Semester::create([
+                'province_id' => $province->id,
+                'semester' => 1,
+                'year' => $year,
+                'misery_count' => $semester1,
+            ]);
+
+            Semester::create([
+                'province_id' => $province->id,
+                'semester' => 2,
+                'year' => $year,
+                'misery_count' => $semester2,
+            ]);
+        }
+    }
+}

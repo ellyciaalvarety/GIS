@@ -1,0 +1,12 @@
+{
+  "name": "Poverty Statistics Portal",
+  "version": "1.0.0",
+  "description": "Indonesian Poverty Statistics Analysis",
+  "scripts": {
+    "serve": "php artisan serve",
+    "migrate": "php artisan migrate",
+    "seed": "php artisan db:seed",
+    "fresh": "php artisan migrate:fresh --seed",
+    "test": "php artisan test"
+  }
+}
