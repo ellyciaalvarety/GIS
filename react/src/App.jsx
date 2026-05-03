@@ -5,6 +5,8 @@ import {
   Tooltip as RechartsTooltip, ResponsiveContainer,
   ScatterChart, Scatter, ZAxis, Cell,
 } from "recharts";
+import { dataPendudukMiskin } from './dataKemiskinan';
+
 
 // NOTE: tambahkan di main.jsx → import 'leaflet/dist/leaflet.css'
 
@@ -77,15 +79,6 @@ function resolveGeoName(rawName) {
 const fmt = (n) => n?.toLocaleString("id-ID") ?? "-";
 const fmtRp = (n) => `Rp ${fmt(n)}`;
 
-function getMapColor(sem2) {
-  if (!sem2) return "#e8edf5";
-  if (sem2 >= 900000) return "#1a365d";
-  if (sem2 >= 800000) return "#1e4a8a";
-  if (sem2 >= 700000) return "#2563eb";
-  if (sem2 >= 600000) return "#60a5fa";
-  if (sem2 >= 500000) return "#93c5fd";
-  return "#dbeafe";
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // GLOBAL STYLES
@@ -340,31 +333,52 @@ function StatCard({ label, value, sub, color = "#2563eb", icon, delay = 0 }) {
 // ═══════════════════════════════════════════════════════════════════════════
 // MAP SECTION
 // ═══════════════════════════════════════════════════════════════════════════
-function MapSection({ geoData, selectedKey, onSelect }) {
+function MapSection({ geoData, selectedKey, onSelect, mapMode }) {
   const geoJsonRef = useRef(null);
   const selectedRef = useRef(selectedKey);
-  useEffect(() => { selectedRef.current = selectedKey; }, [selectedKey]);
 
+  // 1. DIBIKIN DULU: getStyle harus di atas
   const getStyle = useCallback((feature) => {
     const props = feature?.properties || {};
     const rawName = props.state || props.name || props.Propinsi || props.NAME_1 || "";
     const key = resolveGeoName(rawName);
-    const d = key ? DATA_LOOKUP[key] : null;
     const isSelected = key === selectedRef.current;
+
+    let color = "#e8edf5"; 
+    if (key) {
+      if (mapMode === "garis") {
+        const d = DATA_LOOKUP[key];
+        color = d ? getMapColor(d.sem2) : "#e8edf5";
+      } else {
+        const m = dataPendudukMiskin.find(d => d.provinsi.toLowerCase() === key);
+        color = m ? getMapColorMiskin(m.sem2 * 1000) : "#e8edf5";
+      }
+    }
     return {
-      fillColor: d ? getMapColor(d.sem2) : "#e8edf5",
+      fillColor: color,
       fillOpacity: isSelected ? 1 : 0.78,
       color: isSelected ? "#0f1629" : "#c8d4eb",
       weight: isSelected ? 2 : 0.7,
       opacity: 1,
     };
-  }, []);
+  }, [mapMode]);
 
+  // 2. DIPAKE KEMUDIAN: useEffect ditaruh di bawah getStyle
+  useEffect(() => {
+    selectedRef.current = selectedKey;
+    if (geoJsonRef.current) {
+      geoJsonRef.current.setStyle(getStyle);
+      geoJsonRef.current.eachLayer(layer => {
+        if (layer.getTooltip()) layer.unbindTooltip();
+      });
+    }
+  }, [selectedKey, mapMode]);
+
+  // 3. onEachFeature
   const onEachFeature = useCallback((feature, layer) => {
     const props = feature?.properties || {};
     const rawName = props.state || props.name || props.Propinsi || props.NAME_1 || "";
     const key = resolveGeoName(rawName);
-    const d = key ? DATA_LOOKUP[key] : null;
 
     layer.on({
       click: () => {
@@ -373,72 +387,70 @@ function MapSection({ geoData, selectedKey, onSelect }) {
         onSelect(next ? DATA_LOOKUP[next] : null, next);
       },
       mouseover: (e) => {
-        e.target.setStyle({ weight: 2, color: "#2563eb", fillOpacity: 0.95 });
-        e.target.bringToFront();
-      },
-      mouseout: (e) => { if (geoJsonRef.current) geoJsonRef.current.resetStyle(e.target); },
-    });
+        const d = key ? DATA_LOOKUP[key] : null;
+        const m = key ? dataPendudukMiskin.find(item => item.provinsi.toLowerCase() === key) : null;
+        
+        // PASTIIN PAKAI mapMode DARI PROPS
+        const isGaris = mapMode === "garis";
+        
+        const label = isGaris ? "Garis Kemiskinan" : "Total Penduduk Miskin";
+        const value = isGaris 
+          ? `Rp ${d ? d.sem2.toLocaleString('id-ID') : '-'}` 
+          : `${m ? (m.sem2 * 1000).toLocaleString('id-ID') : '-'} Jiwa`;
+        
+        // Warna accent: Biru buat Garis, Merah buat Total Miskin
+        const accentColor = isGaris ? "#2563eb" : "#ef4444";
 
-    if (d) {
-      const kenaikan = d.sem2 - d.sem1;
-      const pct = ((kenaikan / d.sem1) * 100).toFixed(1);
-      layer.bindTooltip(`
-        <div style="font-family:'Sora',sans-serif;background:#fff;border:1px solid #dde4f0;border-radius:12px;padding:12px 14px;box-shadow:0 8px 24px rgba(15,22,41,0.12);min-width:200px;">
-          <div style="font-weight:700;color:#0f1629;font-size:13px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #eef2f9;">${d.provinsi}</div>
-          <div style="display:grid;gap:6px;">
-            <div style="display:flex;justify-content:space-between;font-size:11.5px;">
-              <span style="color:#6b7a9e;">Sem. 1 (Mar)</span>
-              <span style="color:#2563eb;font-weight:600;font-family:'JetBrains Mono',monospace;">Rp ${fmt(d.sem1)}</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;font-size:11.5px;">
-              <span style="color:#6b7a9e;">Sem. 2 (Sep)</span>
-              <span style="color:#10b981;font-weight:600;font-family:'JetBrains Mono',monospace;">Rp ${fmt(d.sem2)}</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;font-size:11.5px;padding-top:6px;border-top:1px solid #eef2f9;">
-              <span style="color:#6b7a9e;">Kenaikan</span>
-              <span style="color:#f59e0b;font-weight:700;font-family:'JetBrains Mono',monospace;">+${pct}%</span>
+        const content = `
+          <div style="font-family:'Sora',sans-serif; background:#fff; border:1px solid #dde4f0; border-radius:12px; padding:12px 14px; box-shadow:0 8px 24px rgba(15,22,41,0.12); min-width:200px;">
+            <div style="font-weight:700; color:#0f1629; font-size:13px; margin-bottom:8px; padding-bottom:6px; border-bottom:1px solid #eef2f9;">${rawName}</div>
+            <div style="display:flex; justify-content:space-between; font-size:11.5px; align-items:center; gap:10px;">
+              <span style="color:#6b7a9e;">${label}</span>
+              <span style="color:${accentColor}; font-weight:700; font-family:'JetBrains Mono',monospace;">${value}</span>
             </div>
           </div>
-        </div>`,
-        { sticky: true, opacity: 1, className: "pdata-tooltip" }
-      );
-    }
-  }, [onSelect]);
+        `;
 
-  useEffect(() => {
-    if (!geoJsonRef.current) return;
-    geoJsonRef.current.eachLayer((layer) => {
-      const feature = layer.feature;
-      if (!feature) return;
-      const props = feature.properties || {};
-      const rawName = props.state || props.name || props.Propinsi || props.NAME_1 || "";
-      const key = resolveGeoName(rawName);
-      const d = key ? DATA_LOOKUP[key] : null;
-      const isSelected = key === selectedKey;
-      layer.setStyle({
-        fillColor: d ? getMapColor(d.sem2) : "#e8edf5",
-        fillOpacity: isSelected ? 1 : 0.78,
-        color: isSelected ? "#0f1629" : "#c8d4eb",
-        weight: isSelected ? 2 : 0.7,
-      });
+        layer.bindTooltip(content, { sticky: true, direction: "top", opacity: 1 }).openTooltip();
+        
+        e.target.setStyle({ 
+          weight: 2, 
+          color: accentColor, 
+          fillOpacity: 1 
+        });
+        e.target.bringToFront();
+      },
+      mouseout: (e) => {
+        layer.unbindTooltip();
+        const isSelected = key === selectedRef.current;
+        e.target.setStyle({
+          weight: isSelected ? 2 : 0.7,
+          color: isSelected ? "#0f1629" : "#c8d4eb",
+          fillOpacity: isSelected ? 1 : 0.78
+        });
+      },
     });
-  }, [selectedKey]);
+    // KUNCINYA: mapMode harus masuk sini biar fungsinya update pas tab diklik!
+  }, [mapMode, onSelect]);
 
   return (
     <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)", height: 420 }}>
-      <MapContainer
-        center={[-2.5, 118]} zoom={4.5}
-        style={{ height: "100%", width: "100%", background: "#f0f6ff" }}
-        zoomControl={true} attributionControl={false} scrollWheelZoom={false}
-      >
+      <MapContainer center={[-2.5, 118]} zoom={4.5} style={{ height: "100%", width: "100%", background: "#f0f6ff" }}>
         <TileLayer url="https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png" />
         {geoData && (
-          <GeoJSON ref={geoJsonRef} data={geoData} style={getStyle} onEachFeature={onEachFeature} />
+          <GeoJSON 
+            key={mapMode} // <-- INI KUNCINYA! Biar dia render ulang total pas ganti mode
+            ref={geoJsonRef} 
+            data={geoData} 
+            style={getStyle} 
+            onEachFeature={onEachFeature} 
+          />
         )}
       </MapContainer>
     </div>
   );
 }
+
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PROVINCE PANEL
@@ -507,18 +519,28 @@ function ProvincePanel({ data, onClose }) {
 // ═══════════════════════════════════════════════════════════════════════════
 // MAP LEGEND
 // ═══════════════════════════════════════════════════════════════════════════
-function MapLegend() {
-  const items = [
+function MapLegend({ mode }) {
+  const items = mode === "garis" ? [
     { color: "#dbeafe", label: "< 500K" },
     { color: "#93c5fd", label: "500–600K" },
     { color: "#60a5fa", label: "600–700K" },
     { color: "#2563eb", label: "700–800K" },
     { color: "#1e4a8a", label: "800–900K" },
     { color: "#1a365d", label: "> 900K" },
+  ] : [
+    { color: "#fee2e2", label: "< 100K" },
+    { color: "#f87171", label: "100–250K" },
+    { color: "#ef4444", label: "250–500K" },
+    { color: "#dc2626", label: "500–750K" },
+    { color: "#b91c1c", label: "750K–1M" },
+    { color: "#7f1d1d", label: "> 1M" },
   ];
+
   return (
     <div style={{ marginTop: 14, display: "flex", flexWrap: "wrap", gap: "8px 16px", alignItems: "center" }}>
-      <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600, letterSpacing: "0.04em" }}>SKALA (Rp):</span>
+      <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600, letterSpacing: "0.04em" }}>
+        SKALA ({mode === "garis" ? "Rp" : "Jiwa"}):
+      </span>
       {items.map(({ color, label }) => (
         <div key={label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
           <div style={{ width: 10, height: 10, borderRadius: 3, background: color, border: "1px solid rgba(0,0,0,0.08)" }} />
@@ -553,25 +575,43 @@ function BarTooltip({ active, payload, label }) {
   );
 }
 
-function ScatterTooltip({ active, payload }) {
-  if (!active || !payload?.length) return null;
-  const d = payload[0]?.payload;
-  if (!d) return null;
-  return (
-    <div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 10, padding: "10px 14px", boxShadow: "var(--shadow-md)", fontFamily: "'Sora',sans-serif", minWidth: 190 }}>
-      <p style={{ fontWeight: 700, fontSize: 12.5, color: "var(--text)", marginBottom: 8 }}>{d.provinsi}</p>
-      {[
-        { label: "Garis Kemiskinan", val: fmtRp(d.sem2), color: "#2563eb" },
-        { label: "Penduduk", val: `${fmt(d.penduduk)} ribu`, color: "#10b981" },
-      ].map(({ label, val, color }) => (
-        <div key={label} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 12, marginBottom: 4 }}>
-          <span style={{ color: "var(--text-muted)" }}>{label}</span>
-          <span style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 600, color }}>{val}</span>
+const ScatterTooltip = ({ active, payload }) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div style={{ 
+        backgroundColor: "#ffffff", 
+        padding: "12px 16px", 
+        borderRadius: "8px", 
+        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)", 
+        border: "1px solid #eef2f9",
+        minWidth: "180px"
+      }}>
+        {/* Nama Provinsi */}
+        <p style={{ fontWeight: "700", color: "#1f2937", fontSize: "14px", margin: "0 0 8px 0", paddingBottom: "8px", borderBottom: "1px solid #eef2f9" }}>
+          {data.name}
+        </p>
+        
+        {/* Baris Garis Kemiskinan */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+          <span style={{ fontSize: "12px", color: "#64748b" }}>Garis Kemiskinan</span>
+          <span style={{ fontSize: "12px", fontWeight: "700", color: "#2563eb" }}>
+            Rp {data.y.toLocaleString('id-ID')}
+          </span>
         </div>
-      ))}
-    </div>
-  );
-}
+        
+        {/* Baris Penduduk */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontSize: "12px", color: "#64748b" }}>Penduduk</span>
+          <span style={{ fontSize: "12px", fontWeight: "700", color: "#10b981" }}>
+            {data.x} Juta
+          </span>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TABLE
@@ -604,6 +644,7 @@ function ProvinceTable({ selectedKey, onSelect }) {
     { key: "sem2", label: "Sem. 2 (Sep)", align: "right" },
     { key: "kenaikan", label: "Kenaikan", align: "right" },
     { key: "penduduk", label: "Penduduk (rb)", align: "right" },
+    { key: "totalMiskin", label: "Total Miskin", align: "right" }
   ];
 
   return (
@@ -614,7 +655,7 @@ function ProvinceTable({ selectedKey, onSelect }) {
       </div>
       <div style={{ borderRadius: 10, border: "1px solid var(--border)", overflow: "hidden" }}>
         <div style={{ overflowX: "auto" }}>
-          <table className="data-table" style={{ minWidth: 640 }}>
+         <table className="data-table" style={{ minWidth: 640 }}>
             <thead>
               <tr>
                 {cols.map(({ key, label, align }) => (
@@ -631,13 +672,20 @@ function ProvinceTable({ selectedKey, onSelect }) {
                 const key = row.provinsi.toLowerCase();
                 const isSelected = key === selectedKey;
                 const kenaikan = row.sem2 - row.sem1;
+
+                // --- LOGIC BARU: Tarik data miskin & benerin populasi ---
+                const miskinData = dataPendudukMiskin.find(d => d.provinsi.toLowerCase() === key);
+                const totalMiskin = miskinData ? (miskinData.sem2 * 1000).toLocaleString('id-ID') : "-"; 
+                const formatPop = (row.penduduk / 10000).toFixed(1) + " Juta";
+
                 return (
                   <tr key={row.provinsi} className={isSelected ? "selected" : ""} onClick={() => onSelect(isSelected ? null : row, isSelected ? null : key)} style={{ cursor: "pointer", background: i % 2 !== 0 && !isSelected ? "var(--gray-50)" : undefined }}>
                     <td style={{ fontWeight: isSelected ? 700 : 500, color: isSelected ? "var(--blue)" : "var(--text)" }}>{row.provinsi}</td>
                     <td className="right mono" style={{ color: "#2563eb" }}>{fmt(row.sem1)}</td>
                     <td className="right mono" style={{ color: "#10b981" }}>{fmt(row.sem2)}</td>
                     <td className="right mono" style={{ color: "#f59e0b" }}>+{fmt(kenaikan)}</td>
-                    <td className="right mono" style={{ color: "#8b5cf6" }}>{fmt(row.penduduk)}</td>
+                    <td className="right mono" style={{ color: "#8b5cf6" }}>{formatPop}</td>
+                    <td className="right mono" style={{ color: "#ef4444", fontWeight: "bold" }}>{totalMiskin}</td>
                   </tr>
                 );
               })}
@@ -747,15 +795,31 @@ export default function App() {
   const [activeSection, setActiveSection] = useState("overview");
   const [chartPage, setChartPage] = useState(0);
   const CHART_PAGE_SIZE = 10;
-
+  const [mapMode, setMapMode] = useState("garis");
   useEffect(() => {
-    fetch(GEOJSON_URL).then(r => r.json()).then(setGeoData).catch(() => {});
+    console.log("Sedang narik data peta...");
+    fetch("https://raw.githubusercontent.com/ans-4175/peta-indonesia-geojson/refs/heads/master/indonesia-prov.geojson")
+      .then(res => {
+        if (!res.ok) throw new Error("Gagal ambil peta dari GitHub");
+        return res.json();
+      })
+      .then(data => {
+        console.log("Data peta berhasil dapet!", data);
+        setGeoData(data);
+      })
+      .catch(err => {
+        console.error("Waduh Nab, error nih:", err);
+      });
   }, []);
+  const selectedRef = useRef(null);
 
   const handleSelect = useCallback((dataObj, key) => {
     setSelectedData(dataObj);
     setSelectedKey(key);
   }, []);
+  const totalMiskinRibu = dataPendudukMiskin.reduce((total, item) => total + item.sem2, 0);
+  const totalMiskinAsli = totalMiskinRibu * 1000;
+  const formatTotalMiskin = (totalMiskinAsli / 1000000).toFixed(1) + " Juta Jiwa";
 
   const stats = useMemo(() => {
     const maxProv = RAW_DATA.reduce((a, b) => a.sem2 > b.sem2 ? a : b);
@@ -770,14 +834,21 @@ export default function App() {
     const sorted = [...RAW_DATA].sort((a, b) => b.sem2 - a.sem2);
     const start = chartPage * CHART_PAGE_SIZE;
     return sorted.slice(start, start + CHART_PAGE_SIZE).map(d => ({
-      name: d.provinsi.length > 11 ? d.provinsi.slice(0, 11) + "…" : d.provinsi,
+      name: d.provinsi, // <-- Udah dibersihin, bakal nampil utuh
       fullName: d.provinsi,
       "Sem. 1": d.sem1,
       "Sem. 2": d.sem2,
     }));
   }, [chartPage]);
 
-  const scatterData = useMemo(() => RAW_DATA.map(d => ({ ...d, x: d.penduduk, y: d.sem2, z: 8 })), []);
+  const scatterData = useMemo(() => {
+    return RAW_DATA.map(d => ({
+      name: d.provinsi, // Ini biar tooltip nampilin nama provinsi
+      x: Number((d.penduduk / 10000).toFixed(1)), // Dibagi 10.000 biar fix jadi "Juta"
+      y: d.sem2,
+      z: 1
+    }));
+  }, []);
   const kenaikanData = useMemo(() => [...RAW_DATA].map(d => ({
     name: d.provinsi.length > 14 ? d.provinsi.slice(0, 14) + "…" : d.provinsi,
     kenaikan: d.sem2 - d.sem1,
@@ -880,11 +951,16 @@ export default function App() {
 
           <main style={{ flex: 1, padding: "24px", display: "flex", flexDirection: "column", gap: 20 }}>
             {/* STAT CARDS */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 14 }}>
               <StatCard label="Garis Tertinggi" value={`Rp ${(stats.maxProv.sem2 / 1000).toFixed(0)}K`} sub={stats.maxProv.provinsi} color="#2563eb" icon="🏆" delay={0} />
               <StatCard label="Garis Terendah" value={`Rp ${(stats.minProv.sem2 / 1000).toFixed(0)}K`} sub={stats.minProv.provinsi} color="#10b981" icon="📉" delay={0.05} />
               <StatCard label="Rata-rata Nasional" value={`Rp ${(stats.avg / 1000).toFixed(0)}K`} sub="Per kapita/bulan (Sem. 2)" color="#8b5cf6" icon="📊" delay={0.1} />
-              <StatCard label="Total Populasi" value={`${(stats.totalPop / 1000).toFixed(1)}M`} sub="dalam ribuan jiwa" color="#f59e0b" icon="👥" delay={0.15} />
+              
+              {/* Card Baru: Total Penduduk Miskin */}
+              <StatCard label="Penduduk Miskin" value={formatTotalMiskin} sub="Nasional (Sem. 2)" color="#ef4444" icon="⚠️" delay={0.15} />
+
+              {/* Card Total Populasi (Udah dirapihin biar ga rancu 2020.5M) */}
+              <StatCard label="Total Populasi" value={`${(stats.totalPop / 10000).toFixed(1)} Juta Jiwa`} sub="Jiwa Keseluruhan" color="#f59e0b" icon="👥" delay={0.2} />
             </div>
 
             {/* ── OVERVIEW ── */}
@@ -897,11 +973,43 @@ export default function App() {
             {/* ── PETA ── */}
             {activeSection === "peta" && (
               <div className="fade-up" style={{ display: "grid", gridTemplateColumns: "1fr 260px", gap: 16 }}>
-                <div className="card" style={{ padding: 20 }}>
-                  <SectionHeader title="Peta Sebaran Garis Kemiskinan Indonesia" subtitle="Hover untuk info cepat · Klik untuk detail provinsi di panel kanan" />
-                  <MapSection geoData={geoData} selectedKey={selectedKey} onSelect={handleSelect} />
-                  <MapLegend />
+                <div className="card" style={{ padding: 20, position: "relative" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+                    <SectionHeader 
+                      title={mapMode === "garis" ? "Peta Sebaran Garis Kemiskinan" : "Peta Sebaran Jumlah Penduduk Miskin"} 
+                      subtitle="Hover untuk info · Klik untuk detail panel kanan" 
+                    />
+                    
+                    {/* TOMBOL SWITCH MODE */}
+                    <div style={{ display: "flex", background: "#f1f5f9", padding: 4, borderRadius: 10, border: "1px solid #e2e8f0" }}>
+                      <button 
+                        onClick={() => setMapMode("garis")}
+                        style={{ padding: "6px 12px", fontSize: 11, fontWeight: 700, borderRadius: 8, cursor: "pointer", border: "none", transition: "0.2s",
+                                background: mapMode === "garis" ? "#fff" : "transparent", color: mapMode === "garis" ? "#2563eb" : "#64748b",
+                                boxShadow: mapMode === "garis" ? "0 2px 4px rgba(0,0,0,0.05)" : "none" }}>
+                        Garis (Rp)
+                      </button>
+                      <button 
+                        onClick={() => setMapMode("miskin")}
+                        style={{ padding: "6px 12px", fontSize: 11, fontWeight: 700, borderRadius: 8, cursor: "pointer", border: "none", transition: "0.2s",
+                                background: mapMode === "miskin" ? "#fff" : "transparent", color: mapMode === "miskin" ? "#ef4444" : "#64748b",
+                                boxShadow: mapMode === "miskin" ? "0 2px 4px rgba(0,0,0,0.05)" : "none" }}>
+                        Total Miskin
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Kirim mapMode ke MapSection */}
+                  {/* Ganti mode={mode} jadi mode={mapMode} */}
+                  <MapSection
+                    geoData={geoData}
+                    selectedKey={selectedKey}
+                    onSelect={handleSelect}
+                    mode={mapMode} // CUKUP SATU BARIS INI AJA UNTUK MODE
+                  />
+                  <MapLegend mode={mapMode} />
                 </div>
+                
                 <div className="card" style={{ minHeight: 480 }}>
                   <ProvincePanel data={selectedData} onClose={() => handleSelect(null, null)} />
                 </div>
@@ -931,13 +1039,19 @@ export default function App() {
                   </div>
                 </div>
                 <ResponsiveContainer width="100%" height={380}>
-                  <BarChart data={barData} margin={{ top: 4, right: 16, left: 40, bottom: 64 }}>
+                  <BarChart 
+                    data={barData} 
+                    margin={{ top: 4, right: 16, left: 40, bottom: 90 }} /* 1. Bottom margin digedein biar teks muat */
+                    barGap={4} /* 2. INI KUNCINYA: Biar tiang Sem 1 dan Sem 2 dempetan! */
+                    barCategoryGap="20%" /* 3. Ngatur jarak antar kelompok provinsi biar rapi */
+                  >
                     <CartesianGrid strokeDasharray="3 3" stroke="#eef2f9" vertical={false} />
-                    <XAxis dataKey="name" tick={{ fill: "#8896b3", fontSize: 10, fontFamily: "Sora" }} axisLine={{ stroke: "#dde4f0" }} tickLine={false} angle={-38} textAnchor="end" height={72} />
+                    {/* 4. Height XAxis digedein + interval={0} biar semua nama provinsi dipaksa muncul */}
+                    <XAxis dataKey="name" interval={0} tick={{ fill: "#8896b3", fontSize: 10, fontFamily: "Sora" }} axisLine={{ stroke: "#dde4f0" }} tickLine={false} angle={-38} textAnchor="end" height={100} />
                     <YAxis tickFormatter={v => `${(v / 1000).toFixed(0)}K`} tick={{ fill: "#8896b3", fontSize: 10, fontFamily: "Sora" }} axisLine={false} tickLine={false} />
                     <RechartsTooltip content={<BarTooltip />} cursor={{ fill: "rgba(37,99,235,0.04)" }} />
-                    <Bar dataKey="Sem. 1" fill="#2563eb" radius={[4, 4, 0, 0]} maxBarSize={18} />
-                    <Bar dataKey="Sem. 2" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={18} />
+                    <Bar dataKey="Sem. 1" fill="#2563eb" radius={[4, 4, 0, 0]} maxBarSize={24} />
+                    <Bar dataKey="Sem. 2" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={24} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -946,14 +1060,15 @@ export default function App() {
             {/* ── KORELASI ── */}
             {activeSection === "korelasi" && (
               <div className="card fade-up" style={{ padding: 20 }}>
-                <SectionHeader title="Korelasi: Garis Kemiskinan vs Jumlah Penduduk" subtitle="Setiap titik = 1 provinsi · X: Penduduk (ribu) · Y: Garis Kemiskinan Sem. 2 (Rp)" color="#8b5cf6" />
+                <SectionHeader title="Korelasi: Garis Kemiskinan vs Jumlah Penduduk" subtitle="Setiap titik = 1 provinsi · X: Penduduk (Juta Jiwa) · Y: Garis Kemiskinan Sem. 2 (Rp)" color="#8b5cf6" />
                 <ResponsiveContainer width="100%" height={420}>
                   <ScatterChart margin={{ top: 10, right: 30, left: 40, bottom: 30 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#eef2f9" />
+                    {/* Sumbu X udah diformat ke Juta Jiwa */}
                     <XAxis type="number" dataKey="x" name="Penduduk"
-                      tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}M` : `${v}rb`}
+                      tickFormatter={v => `${v} Juta`}
                       tick={{ fill: "#8896b3", fontSize: 10 }} axisLine={{ stroke: "#dde4f0" }} tickLine={false}
-                      label={{ value: "Jumlah Penduduk (ribu jiwa)", position: "insideBottom", offset: -18, fill: "#8896b3", fontSize: 11 }} />
+                      label={{ value: "Jumlah Penduduk (Juta Jiwa)", position: "insideBottom", offset: -18, fill: "#8896b3", fontSize: 11 }} />
                     <YAxis type="number" dataKey="y" name="Garis Kemiskinan"
                       tickFormatter={v => `${(v / 1000).toFixed(0)}K`}
                       tick={{ fill: "#8896b3", fontSize: 10 }} axisLine={false} tickLine={false}
@@ -963,9 +1078,6 @@ export default function App() {
                     <Scatter data={scatterData} fill="#6366f1" fillOpacity={0.6} stroke="#4f46e5" strokeWidth={1} />
                   </ScatterChart>
                 </ResponsiveContainer>
-                <p style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center", marginTop: 8 }}>
-                  Catatan: Jawa Barat (511.639 ribu) tampil sebagai outlier jauh di sisi kanan
-                </p>
               </div>
             )}
 
@@ -1028,4 +1140,24 @@ export default function App() {
       </div>
     </>
   );
+}
+// Taruh di paling bawah file (setelah baris 1112)
+function getMapColor(sem2) {
+  if (!sem2) return "#e8edf5";
+  if (sem2 >= 900000) return "#1a365d";
+  if (sem2 >= 800000) return "#1e4a8a";
+  if (sem2 >= 700000) return "#2563eb";
+  if (sem2 >= 600000) return "#60a5fa";
+  if (sem2 >= 500000) return "#93c5fd";
+  return "#dbeafe";
+}
+
+function getMapColorMiskin(v) {
+  if (!v) return "#e8edf5";
+  if (v >= 1000000) return "#7f1d1d"; 
+  if (v >= 750000)  return "#b91c1c";
+  if (v >= 500000)  return "#dc2626";
+  if (v >= 250000)  return "#ef4444";
+  if (v >= 100000)  return "#f87171";
+  return "#fee2e2";
 }
