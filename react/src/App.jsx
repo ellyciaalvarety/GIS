@@ -73,6 +73,75 @@ function resolveGeoName(rawName) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// MISKIN DATA LOOKUP
+// Nama di dataPendudukMiskin pakai HURUF KAPITAL, perlu dinormalisasi
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Peta dari key RAW_DATA (lowercase) → nama di dataPendudukMiskin (lowercase)
+const MISKIN_NAME_MAP = {
+  "aceh": "aceh",
+  "sumatera utara": "sumatera utara",
+  "sumatera barat": "sumatera barat",
+  "riau": "riau",
+  "jambi": "jambi",
+  "sumatera selatan": "sumatera selatan",
+  "bengkulu": "bengkulu",
+  "lampung": "lampung",
+  "kep. bangka belitung": "kep. bangka belitung",
+  "kep. riau": "kep. riau",
+  "dki jakarta": "dki jakarta",
+  "jawa barat": "jawa barat",
+  "jawa tengah": "jawa tengah",
+  "di. yogyakarta": "di yogyakarta",
+  "jawa timur": "jawa timur",
+  "banten": "banten",
+  "bali": "bali",
+  "nusa tenggara barat": "nusa tenggara barat",
+  "nusa tenggara timur": "nusa tenggara timur",
+  "kalimantan barat": "kalimantan barat",
+  "kalimantan tengah": "kalimantan tengah",
+  "kalimantan selatan": "kalimantan selatan",
+  "kalimantan timur": "kalimantan timur",
+  "kalimantan utara": "kalimantan utara",
+  "sulawesi utara": "sulawesi utara",
+  "sulawesi tengah": "sulawesi tengah",
+  "sulawesi selatan": "sulawesi selatan",
+  "sulawesi tenggara": "sulawesi tenggara",
+  "gorontalo": "gorontalo",
+  "sulawesi barat": "sulawesi barat",
+  "maluku": "maluku",
+  "maluku utara": "maluku utara",
+  "papua barat": "papua barat",
+  "papua": "papua",
+};
+
+// Build lookup sekali dari dataPendudukMiskin (lowercase key)
+const MISKIN_LOOKUP = {};
+dataPendudukMiskin.forEach((d) => {
+  MISKIN_LOOKUP[d.provinsi.toLowerCase()] = d;
+});
+
+function getMiskinData(provinsiRawKey) {
+  // provinsiRawKey = lowercase nama dari RAW_DATA, misal "di. yogyakarta"
+  const miskinKey = MISKIN_NAME_MAP[provinsiRawKey];
+  if (!miskinKey) return null;
+  return MISKIN_LOOKUP[miskinKey] || null;
+}
+
+// Tambahkan totalMiskin ke setiap row RAW_DATA sebagai angka (jiwa)
+const ENRICHED_DATA = RAW_DATA.map((d) => {
+  const key = d.provinsi.toLowerCase();
+  const miskin = getMiskinData(key);
+  return {
+    ...d,
+    totalMiskin: miskin ? Math.round(miskin.sem2 * 1000) : null,
+  };
+});
+
+// Rebuild DATA_LOOKUP dengan data yang sudah enriched
+ENRICHED_DATA.forEach((d) => { DATA_LOOKUP[d.provinsi.toLowerCase()] = d; });
+
+// ═══════════════════════════════════════════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════════════════════════════════════════
 const fmt = (n) => n?.toLocaleString("id-ID") ?? "-";
@@ -141,7 +210,7 @@ const GLOBAL_STYLES = `
   .search-input:focus { border-color:var(--blue); box-shadow:0 0 0 3px rgba(37,99,235,0.08); background:var(--white); }
   .search-wrap { position:relative; }
   .search-wrap .search-icon { position:absolute; left:11px; top:50%; transform:translateY(-50%); color:var(--text-muted); font-size:14px; pointer-events:none; }
-  .province-panel-inner { display:flex; flex-direction:column; height:100%; }
+  .province-panel-inner { display:flex; flex-direction:column; height:100%; overflow:hidden; }
   .top-bar-item { height:32px; padding:0 10px; border-radius:6px; font-size:11px; font-weight:600; letter-spacing:0.03em; display:inline-flex; align-items:center; gap:5px; }
   .section-label { font-size:10.5px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--text-muted); margin-bottom:8px; }
   .mini-bar-wrap { height:5px; background:var(--gray-100); border-radius:3px; overflow:hidden; margin-top:5px; }
@@ -168,20 +237,147 @@ function StatCard({ label, value, sub, color = "#2563eb", icon, delay = 0 }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// MAP SECTION — tooltip nama provinsi saja, warna biru
+// SELECTED PROVINCE CARD (single card dalam panel multi-select)
 // ═══════════════════════════════════════════════════════════════════════════
-function MapSection({ geoData, selectedKey, onSelect }) {
-  const geoJsonRef = useRef(null);
-  const selectedRef = useRef(selectedKey);
+const CARD_COLORS = ["#2563eb", "#10b981", "#f59e0b", "#8b5cf6", "#ef4444", "#06b6d4"];
 
-  useEffect(() => { selectedRef.current = selectedKey; }, [selectedKey]);
+function SelectedProvinceCard({ data, index, totalCount, onRemove }) {
+  const accentColor = CARD_COLORS[index % CARD_COLORS.length];
+  const kenaikan = data.sem2 - data.sem1;
+  const pctKenaikan = ((kenaikan / data.sem1) * 100).toFixed(2);
+  const maxSem = Math.max(data.sem1, data.sem2);
+
+  return (
+    <div style={{
+      background: "var(--white)",
+      border: "1px solid var(--border)",
+      borderLeft: `3px solid ${accentColor}`,
+      borderRadius: 12,
+      flexShrink: 0,
+    }}>
+      {/* Header */}
+      <div style={{ padding: "12px 14px 10px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: accentColor, marginBottom: 3 }}>
+            Provinsi Terpilih {totalCount > 1 ? `#${index + 1}` : ""}
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", lineHeight: 1.2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            {data.provinsi}
+            <span style={{ fontSize: 9, background: `${accentColor}12`, color: accentColor, padding: "2px 6px", borderRadius: 20, fontWeight: 500 }}>
+              {(data.penduduk / 10000).toFixed(1)} Juta jiwa
+            </span>
+          </div>
+        </div>
+        <button
+          onClick={() => onRemove(data.provinsi.toLowerCase())}
+          style={{ width: 24, height: 24, borderRadius: "50%", background: "var(--gray-100)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "var(--text-muted)", flexShrink: 0, marginLeft: 6 }}
+        >✕</button>
+      </div>
+
+      {/* Garis kemiskinan mini bars */}
+      <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)" }}>
+        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 8 }}>Garis Kemiskinan</div>
+        {[
+          { label: "Sem. 1 (Maret)", val: data.sem1, color: "#2563eb" },
+          { label: "Sem. 2 (September)", val: data.sem2, color: "#10b981" },
+        ].map(({ label, val, color }) => (
+          <div key={label} style={{ marginBottom: 7 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+              <span style={{ fontSize: 10.5, color: "var(--text-muted)" }}>{label}</span>
+              <span style={{ fontSize: 10.5, fontFamily: "'JetBrains Mono',monospace", fontWeight: 600, color }}>{fmtRp(val)}</span>
+            </div>
+            <div className="mini-bar-wrap">
+              <div className="mini-bar-fill" style={{ width: `${(val / maxSem) * 100}%`, background: color }} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Stats rows */}
+      <div style={{ padding: "10px 14px" }}>
+        {[
+          { label: "Kenaikan", value: `+${fmtRp(kenaikan)}`, color: "#f59e0b" },
+          { label: "Perubahan", value: `+${pctKenaikan}%`, color: "#8b5cf6" },
+          { label: "Total Penduduk", value: `${(data.penduduk / 10000).toFixed(1)} Juta jiwa`, color: "#2563eb" },
+          data.totalMiskin !== null
+            ? { label: "Penduduk Miskin", value: `${fmt(data.totalMiskin)} jiwa`, color: "#ef4444" }
+            : { label: "Penduduk Miskin", value: "Data tidak tersedia", color: "var(--text-muted)" },
+        ].map(({ label, value, color }) => (
+          <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: "1px solid var(--gray-50)" }}>
+            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{label}</span>
+            <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, color }}>{value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PROVINCE PANEL — multi-select
+// ═══════════════════════════════════════════════════════════════════════════
+function ProvincePanel({ selectedKeys, onRemove }) {
+  if (selectedKeys.length === 0) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", padding: 24, textAlign: "center", gap: 12 }}>
+        <div style={{ width: 52, height: 52, borderRadius: "50%", background: "var(--gray-100)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🗺️</div>
+        <p style={{ fontWeight: 600, color: "var(--text-muted)", fontSize: 13 }}>Belum ada provinsi dipilih</p>
+        <p style={{ fontSize: 12, color: "var(--gray-400)", lineHeight: 1.6 }}>Klik wilayah peta atau baris tabel untuk melihat detail data kemiskinan.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="province-panel-inner">
+      {/* Header */}
+      <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--blue)", marginBottom: 2 }}>
+          Provinsi Terpilih ({selectedKeys.length})
+        </div>
+        <p style={{ fontSize: 11, color: "var(--text-muted)" }}>Klik ✕ untuk hapus dari perbandingan</p>
+      </div>
+
+      {/* Scrollable cards */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "10px 10px 12px", display: "flex", flexDirection: "column", gap: 10 }}>
+        {selectedKeys.map((key, idx) => {
+          const data = DATA_LOOKUP[key];
+          if (!data) return null;
+          return (
+            <SelectedProvinceCard
+              key={key}
+              data={data}
+              index={idx}
+              totalCount={selectedKeys.length}
+              onRemove={onRemove}
+            />
+          );
+        })}
+      </div>
+
+      <div style={{ padding: "8px 14px", background: "var(--gray-50)", borderTop: "1px solid var(--border)", borderRadius: "0 0 16px 16px", flexShrink: 0 }}>
+        <p style={{ fontSize: 11, color: "var(--gray-400)", textAlign: "center" }}>
+          Klik provinsi lain untuk menambah perbandingan
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MAP SECTION — multi-select aware
+// ═══════════════════════════════════════════════════════════════════════════
+function MapSection({ geoData, selectedKeys, onToggle }) {
+  const geoJsonRef = useRef(null);
+  const selectedRef = useRef(selectedKeys);
+
+  useEffect(() => { selectedRef.current = selectedKeys; }, [selectedKeys]);
 
   const getStyle = useCallback((feature) => {
     const props = feature?.properties || {};
     const rawName = props.state || props.name || props.Propinsi || props.NAME_1 || "";
     const key = resolveGeoName(rawName);
     const d = key ? DATA_LOOKUP[key] : null;
-    const isSelected = key === selectedRef.current;
+    const isSelected = key ? selectedRef.current.includes(key) : false;
     return {
       fillColor: d ? getMapColor(d.sem2) : "#e8edf5",
       fillOpacity: isSelected ? 1 : 0.78,
@@ -196,17 +392,14 @@ function MapSection({ geoData, selectedKey, onSelect }) {
     const rawName = props.state || props.name || props.Propinsi || props.NAME_1 || "";
     const key = resolveGeoName(rawName);
     const d = key ? DATA_LOOKUP[key] : null;
-    // Gunakan nama resmi dari data jika ada, fallback ke nama GeoJSON
     const displayName = d ? d.provinsi : rawName;
 
     layer.on({
       click: () => {
         if (!key) return;
-        const next = key === selectedRef.current ? null : key;
-        onSelect(next ? DATA_LOOKUP[next] : null, next);
+        onToggle(key);
       },
       mouseover: (e) => {
-        // Tooltip: nama provinsi saja
         layer.bindTooltip(
           `<div style="font-family:'Sora',sans-serif;background:#fff;border:1px solid #dde4f0;border-radius:8px;padding:7px 13px;box-shadow:0 4px 16px rgba(15,22,41,0.1);font-size:13px;font-weight:700;color:#0f1629;white-space:nowrap;">${displayName}</div>`,
           { sticky: true, direction: "top", opacity: 1 }
@@ -216,7 +409,7 @@ function MapSection({ geoData, selectedKey, onSelect }) {
       },
       mouseout: (e) => {
         layer.unbindTooltip();
-        const isSelected = key === selectedRef.current;
+        const isSelected = key ? selectedRef.current.includes(key) : false;
         e.target.setStyle({
           weight: isSelected ? 2 : 0.7,
           color: isSelected ? "#0f1629" : "#c8d4eb",
@@ -224,8 +417,9 @@ function MapSection({ geoData, selectedKey, onSelect }) {
         });
       },
     });
-  }, [onSelect]);
+  }, [onToggle]);
 
+  // Update style saat selectedKeys berubah
   useEffect(() => {
     if (!geoJsonRef.current) return;
     geoJsonRef.current.eachLayer((layer) => {
@@ -235,7 +429,7 @@ function MapSection({ geoData, selectedKey, onSelect }) {
       const rawName = props.state || props.name || props.Propinsi || props.NAME_1 || "";
       const key = resolveGeoName(rawName);
       const d = key ? DATA_LOOKUP[key] : null;
-      const isSelected = key === selectedKey;
+      const isSelected = key ? selectedKeys.includes(key) : false;
       layer.setStyle({
         fillColor: d ? getMapColor(d.sem2) : "#e8edf5",
         fillOpacity: isSelected ? 1 : 0.78,
@@ -243,7 +437,7 @@ function MapSection({ geoData, selectedKey, onSelect }) {
         weight: isSelected ? 2 : 0.7,
       });
     });
-  }, [selectedKey]);
+  }, [selectedKeys]);
 
   return (
     <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)", height: 420 }}>
@@ -256,7 +450,7 @@ function MapSection({ geoData, selectedKey, onSelect }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// MAP LEGEND — biru
+// MAP LEGEND
 // ═══════════════════════════════════════════════════════════════════════════
 function MapLegend() {
   const items = [
@@ -276,82 +470,6 @@ function MapLegend() {
           <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{label}</span>
         </div>
       ))}
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// PROVINCE PANEL — dengan total penduduk miskin
-// ═══════════════════════════════════════════════════════════════════════════
-function ProvincePanel({ data, onClose }) {
-  if (!data) return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", padding: 24, textAlign: "center", gap: 12 }}>
-      <div style={{ width: 52, height: 52, borderRadius: "50%", background: "var(--gray-100)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🗺️</div>
-      <p style={{ fontWeight: 600, color: "var(--text-muted)", fontSize: 13 }}>Pilih Provinsi</p>
-      <p style={{ fontSize: 12, color: "var(--gray-400)", lineHeight: 1.6 }}>Klik wilayah peta untuk melihat detail data provinsi.</p>
-    </div>
-  );
-
-  const kenaikan = data.sem2 - data.sem1;
-  const pctKenaikan = ((kenaikan / data.sem1) * 100).toFixed(2);
-  const maxSem = Math.max(data.sem1, data.sem2);
-
-  // Data penduduk miskin
-  const miskinEntry = dataPendudukMiskin.find(
-    d => d.provinsi.toLowerCase() === data.provinsi.toLowerCase()
-  );
-  const totalMiskin = miskinEntry ? miskinEntry.sem2 * 1000 : null;
-
-  return (
-    <div className="province-panel-inner">
-      <div style={{ padding: "16px 16px 12px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--blue)", marginBottom: 4 }}>Provinsi Terpilih</div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", lineHeight: 1.2 }}>{data.provinsi}</div>
-        </div>
-        <button onClick={onClose} style={{ width: 26, height: 26, borderRadius: "50%", background: "var(--gray-100)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>✕</button>
-      </div>
-
-      {/* Mini bar garis kemiskinan */}
-      <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--border)" }}>
-        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 10 }}>Garis Kemiskinan</div>
-        {[
-          { label: "Sem. 1 (Maret)", val: data.sem1, color: "#2563eb" },
-          { label: "Sem. 2 (September)", val: data.sem2, color: "#10b981" },
-        ].map(({ label, val, color }) => (
-          <div key={label} style={{ marginBottom: 10 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
-              <span style={{ fontSize: 11.5, color: "var(--text-muted)" }}>{label}</span>
-              <span style={{ fontSize: 11.5, fontFamily: "'JetBrains Mono',monospace", fontWeight: 600, color }}>{fmtRp(val)}</span>
-            </div>
-            <div className="mini-bar-wrap">
-              <div className="mini-bar-fill" style={{ width: `${(val / maxSem) * 100}%`, background: color }} />
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Data rows */}
-      <div style={{ padding: "14px 16px", flex: 1 }}>
-        {[
-          { label: "Kenaikan", value: `+${fmtRp(kenaikan)}`, color: "#f59e0b" },
-          { label: "Perubahan", value: `+${pctKenaikan}%`, color: "#8b5cf6" },
-          { label: "Penduduk", value: `${fmt(data.penduduk)} ribu jiwa`, color: "#2563eb" },
-          ...(totalMiskin !== null
-            ? [{ label: "Penduduk Miskin", value: `${fmt(totalMiskin)} jiwa`, color: "#ef4444" }]
-            : [{ label: "Penduduk Miskin", value: "Data tidak tersedia", color: "var(--text-muted)" }]
-          ),
-        ].map(({ label, value, color }) => (
-          <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderBottom: "1px solid var(--gray-50)" }}>
-            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{label}</span>
-            <span style={{ fontSize: 12, fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, color }}>{value}</span>
-          </div>
-        ))}
-      </div>
-
-      <div style={{ padding: "10px 16px", background: "var(--gray-50)", borderTop: "1px solid var(--border)", borderRadius: "0 0 16px 16px" }}>
-        <p style={{ fontSize: 11, color: "var(--gray-400)", textAlign: "center" }}>Klik provinsi lain untuk membandingkan</p>
-      </div>
     </div>
   );
 }
@@ -400,9 +518,9 @@ const ScatterTooltip = ({ active, payload }) => {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// TABLE
+// TABLE — sort totalMiskin bekerja karena pakai ENRICHED_DATA
 // ═══════════════════════════════════════════════════════════════════════════
-function ProvinceTable({ selectedKey, onSelect }) {
+function ProvinceTable({ selectedKeys, onToggle }) {
   const [sortKey, setSortKey] = useState("sem2");
   const [sortDir, setSortDir] = useState("desc");
   const [search, setSearch] = useState("");
@@ -413,11 +531,21 @@ function ProvinceTable({ selectedKey, onSelect }) {
   };
 
   const sorted = useMemo(() => {
-    let d = [...RAW_DATA];
+    let d = [...ENRICHED_DATA];
     if (search) d = d.filter(r => r.provinsi.toLowerCase().includes(search.toLowerCase()));
     d.sort((a, b) => {
-      const va = sortKey === "kenaikan" ? a.sem2 - a.sem1 : a[sortKey];
-      const vb = sortKey === "kenaikan" ? b.sem2 - b.sem1 : b[sortKey];
+      let va, vb;
+      if (sortKey === "kenaikan") {
+        va = a.sem2 - a.sem1;
+        vb = b.sem2 - b.sem1;
+      } else if (sortKey === "totalMiskin") {
+        // Null dianggap -1 supaya muncul di bawah
+        va = a.totalMiskin ?? -1;
+        vb = b.totalMiskin ?? -1;
+      } else {
+        va = a[sortKey];
+        vb = b[sortKey];
+      }
       if (typeof va === "string") return sortDir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va);
       return sortDir === "asc" ? va - vb : vb - va;
     });
@@ -456,19 +584,23 @@ function ProvinceTable({ selectedKey, onSelect }) {
             <tbody>
               {sorted.map((row, i) => {
                 const key = row.provinsi.toLowerCase();
-                const isSelected = key === selectedKey;
+                const isSelected = selectedKeys.includes(key);
                 const kenaikan = row.sem2 - row.sem1;
-                const miskinData = dataPendudukMiskin.find(d => d.provinsi.toLowerCase() === key);
-                const totalMiskin = miskinData ? (miskinData.sem2 * 1000).toLocaleString('id-ID') : "-";
                 const formatPop = (row.penduduk / 10000).toFixed(1) + " Juta";
+                const totalMiskinStr = row.totalMiskin !== null ? row.totalMiskin.toLocaleString('id-ID') : "-";
                 return (
-                  <tr key={row.provinsi} className={isSelected ? "selected" : ""} onClick={() => onSelect(isSelected ? null : row, isSelected ? null : key)} style={{ cursor: "pointer", background: i % 2 !== 0 && !isSelected ? "var(--gray-50)" : undefined }}>
+                  <tr
+                    key={row.provinsi}
+                    className={isSelected ? "selected" : ""}
+                    onClick={() => onToggle(key)}
+                    style={{ cursor: "pointer", background: i % 2 !== 0 && !isSelected ? "var(--gray-50)" : undefined }}
+                  >
                     <td style={{ fontWeight: isSelected ? 700 : 500, color: isSelected ? "var(--blue)" : "var(--text)" }}>{row.provinsi}</td>
                     <td className="right mono" style={{ color: "#2563eb" }}>{fmt(row.sem1)}</td>
                     <td className="right mono" style={{ color: "#10b981" }}>{fmt(row.sem2)}</td>
                     <td className="right mono" style={{ color: "#f59e0b" }}>+{fmt(kenaikan)}</td>
                     <td className="right mono" style={{ color: "#8b5cf6" }}>{formatPop}</td>
-                    <td className="right mono" style={{ color: "#ef4444", fontWeight: "bold" }}>{totalMiskin}</td>
+                    <td className="right mono" style={{ color: "#ef4444", fontWeight: "bold" }}>{totalMiskinStr}</td>
                   </tr>
                 );
               })}
@@ -477,7 +609,7 @@ function ProvinceTable({ selectedKey, onSelect }) {
         </div>
       </div>
       <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8, textAlign: "right" }}>
-        {sorted.length} dari {RAW_DATA.length} provinsi
+        {sorted.length} dari {ENRICHED_DATA.length} provinsi
       </p>
     </div>
   );
@@ -502,9 +634,9 @@ function SectionHeader({ title, subtitle, color = "var(--blue)" }) {
 // DASHBOARD OVERVIEW
 // ═══════════════════════════════════════════════════════════════════════════
 function DashboardOverview({ stats, onNavigate }) {
-  const top5High = useMemo(() => [...RAW_DATA].sort((a, b) => b.sem2 - a.sem2).slice(0, 5), []);
-  const top5Low = useMemo(() => [...RAW_DATA].sort((a, b) => a.sem2 - b.sem2).slice(0, 5), []);
-  const maxSem2 = Math.max(...RAW_DATA.map(d => d.sem2));
+  const top5High = useMemo(() => [...ENRICHED_DATA].sort((a, b) => b.sem2 - a.sem2).slice(0, 5), []);
+  const top5Low = useMemo(() => [...ENRICHED_DATA].sort((a, b) => a.sem2 - b.sem2).slice(0, 5), []);
+  const maxSem2 = Math.max(...ENRICHED_DATA.map(d => d.sem2));
 
   return (
     <div style={{ display: "grid", gap: 20 }}>
@@ -560,8 +692,8 @@ function DashboardOverview({ stats, onNavigate }) {
 // ═══════════════════════════════════════════════════════════════════════════
 export default function App() {
   const [geoData, setGeoData] = useState(null);
-  const [selectedData, setSelectedData] = useState(null);
-  const [selectedKey, setSelectedKey] = useState(null);
+  // Multi-select: array of lowercase province keys
+  const [selectedKeys, setSelectedKeys] = useState([]);
   const [activeSection, setActiveSection] = useState("overview");
   const [chartPage, setChartPage] = useState(0);
   const CHART_PAGE_SIZE = 10;
@@ -573,25 +705,32 @@ export default function App() {
       .catch(err => console.error("Error peta:", err));
   }, []);
 
-  const handleSelect = useCallback((dataObj, key) => {
-    setSelectedData(dataObj);
-    setSelectedKey(key);
+  // Toggle satu provinsi di/dari selectedKeys
+  const handleToggle = useCallback((key) => {
+    setSelectedKeys(prev =>
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    );
+  }, []);
+
+  // Hapus dari panel
+  const handleRemove = useCallback((key) => {
+    setSelectedKeys(prev => prev.filter(k => k !== key));
   }, []);
 
   const totalMiskinRibu = dataPendudukMiskin.reduce((total, item) => total + item.sem2, 0);
   const formatTotalMiskin = ((totalMiskinRibu * 1000) / 1000000).toFixed(1) + " Juta Jiwa";
 
   const stats = useMemo(() => {
-    const maxProv = RAW_DATA.reduce((a, b) => a.sem2 > b.sem2 ? a : b);
-    const minProv = RAW_DATA.reduce((a, b) => a.sem2 < b.sem2 ? a : b);
-    const avg = Math.round(RAW_DATA.reduce((s, b) => s + b.sem2, 0) / RAW_DATA.length);
-    const totalPop = RAW_DATA.reduce((s, b) => s + b.penduduk, 0);
+    const maxProv = ENRICHED_DATA.reduce((a, b) => a.sem2 > b.sem2 ? a : b);
+    const minProv = ENRICHED_DATA.reduce((a, b) => a.sem2 < b.sem2 ? a : b);
+    const avg = Math.round(ENRICHED_DATA.reduce((s, b) => s + b.sem2, 0) / ENRICHED_DATA.length);
+    const totalPop = ENRICHED_DATA.reduce((s, b) => s + b.penduduk, 0);
     return { maxProv, minProv, avg, totalPop };
   }, []);
 
-  const totalPages = Math.ceil(RAW_DATA.length / CHART_PAGE_SIZE);
+  const totalPages = Math.ceil(ENRICHED_DATA.length / CHART_PAGE_SIZE);
   const barData = useMemo(() => {
-    const sorted = [...RAW_DATA].sort((a, b) => b.sem2 - a.sem2);
+    const sorted = [...ENRICHED_DATA].sort((a, b) => b.sem2 - a.sem2);
     const start = chartPage * CHART_PAGE_SIZE;
     return sorted.slice(start, start + CHART_PAGE_SIZE).map(d => ({
       name: d.provinsi, fullName: d.provinsi,
@@ -599,13 +738,13 @@ export default function App() {
     }));
   }, [chartPage]);
 
-  const scatterData = useMemo(() => RAW_DATA.map(d => ({
+  const scatterData = useMemo(() => ENRICHED_DATA.map(d => ({
     name: d.provinsi,
     x: Number((d.penduduk / 10000).toFixed(1)),
     y: d.sem2, z: 1,
   })), []);
 
-  const kenaikanData = useMemo(() => [...RAW_DATA].map(d => ({
+  const kenaikanData = useMemo(() => [...ENRICHED_DATA].map(d => ({
     name: d.provinsi.length > 14 ? d.provinsi.slice(0, 14) + "…" : d.provinsi,
     kenaikan: d.sem2 - d.sem1,
   })).sort((a, b) => b.kenaikan - a.kenaikan), []);
@@ -620,6 +759,9 @@ export default function App() {
   ];
 
   const currentNav = navItems.find(n => n.key === activeSection);
+
+  // Untuk header tabel: data provinsi pertama yang dipilih (legacy compat)
+  const firstSelectedData = selectedKeys.length > 0 ? DATA_LOOKUP[selectedKeys[0]] : null;
 
   return (
     <>
@@ -653,7 +795,7 @@ export default function App() {
             {[
               { label: "Tertinggi", val: stats.maxProv.provinsi, color: "#2563eb" },
               { label: "Terendah", val: stats.minProv.provinsi, color: "#10b981" },
-              { label: "Cakupan", val: `${RAW_DATA.length} provinsi`, color: "#8b5cf6" },
+              { label: "Cakupan", val: `${ENRICHED_DATA.length} provinsi`, color: "#8b5cf6" },
             ].map(({ label, val, color }) => (
               <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
                 <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{label}</span>
@@ -699,17 +841,17 @@ export default function App() {
             )}
 
             {activeSection === "peta" && (
-              <div className="fade-up" style={{ display: "grid", gridTemplateColumns: "1fr 260px", gap: 16 }}>
+              <div className="fade-up" style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: 16 }}>
                 <div className="card" style={{ padding: 20 }}>
                   <SectionHeader
                     title="Peta Sebaran Garis Kemiskinan Indonesia"
-                    subtitle="Hover untuk nama provinsi · Klik untuk detail di panel kanan"
+                    subtitle="Hover untuk nama provinsi · Klik untuk pilih/hapus · Pilih lebih dari satu untuk perbandingan"
                   />
-                  <MapSection geoData={geoData} selectedKey={selectedKey} onSelect={handleSelect} />
+                  <MapSection geoData={geoData} selectedKeys={selectedKeys} onToggle={handleToggle} />
                   <MapLegend />
                 </div>
                 <div className="card" style={{ minHeight: 480 }}>
-                  <ProvincePanel data={selectedData} onClose={() => handleSelect(null, null)} />
+                  <ProvincePanel selectedKeys={selectedKeys} onRemove={handleRemove} />
                 </div>
               </div>
             )}
@@ -783,30 +925,54 @@ export default function App() {
 
             {activeSection === "tabel" && (
               <div className="card fade-up" style={{ padding: 20 }}>
-                <SectionHeader title="Tabel Ringkasan Data Seluruh Provinsi" subtitle="Klik baris untuk menyorot · Klik header kolom untuk mengurutkan" color="#10b981" />
-                {selectedData && (
-                  <div style={{ marginBottom: 16, padding: 14, borderRadius: 10, background: "#eff6ff", border: "1px solid #bae6fd", display: "flex", gap: 12, alignItems: "center" }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: "#2563eb", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 3 }}>Dipilih</div>
-                      <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)" }}>{selectedData.provinsi}</div>
+                <SectionHeader title="Tabel Ringkasan Data Seluruh Provinsi" subtitle="Klik baris untuk pilih/hapus · Klik header kolom untuk mengurutkan · Pilih beberapa provinsi untuk perbandingan" color="#10b981" />
+
+                {/* Panel ringkasan provinsi terpilih di tabel */}
+                {selectedKeys.length > 0 && (
+                  <div style={{ marginBottom: 16, padding: 14, borderRadius: 10, background: "#eff6ff", border: "1px solid #bae6fd" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: "#2563eb", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                        Dipilih ({selectedKeys.length} provinsi)
+                      </div>
+                      <button
+                        className="btn btn-ghost"
+                        onClick={() => setSelectedKeys([])}
+                        style={{ fontSize: 11 }}
+                      >
+                        Hapus Semua ✕
+                      </button>
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
-                      {[
-                        { l: "Sem. 1", v: fmtRp(selectedData.sem1), c: "#2563eb" },
-                        { l: "Sem. 2", v: fmtRp(selectedData.sem2), c: "#10b981" },
-                        { l: "Kenaikan", v: `+${fmtRp(selectedData.sem2 - selectedData.sem1)}`, c: "#f59e0b" },
-                        { l: "Penduduk", v: `${fmt(selectedData.penduduk)} rb`, c: "#8b5cf6" },
-                      ].map(({ l, v, c }) => (
-                        <div key={l} style={{ background: "#fff", borderRadius: 8, padding: "8px 10px", textAlign: "center", border: "1px solid var(--border)" }}>
-                          <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>{l}</div>
-                          <div style={{ fontSize: 11.5, fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, color: c }}>{v}</div>
-                        </div>
-                      ))}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {selectedKeys.map((key, idx) => {
+                        const d = DATA_LOOKUP[key];
+                        if (!d) return null;
+                        const accentColor = CARD_COLORS[idx % CARD_COLORS.length];
+                        return (
+                          <div key={key} style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 10px", background: "#fff", borderRadius: 8, border: `1px solid ${accentColor}22`, borderLeft: `3px solid ${accentColor}` }}>
+                            <div style={{ fontWeight: 700, fontSize: 13, color: "var(--text)", flex: 1 }}>{d.provinsi}</div>
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 8, flex: 3 }}>
+                              {[
+                                { l: "Sem. 1", v: fmtRp(d.sem1), c: "#2563eb" },
+                                { l: "Sem. 2", v: fmtRp(d.sem2), c: "#10b981" },
+                                { l: "Kenaikan", v: `+${fmtRp(d.sem2 - d.sem1)}`, c: "#f59e0b" },
+                                { l: "Total Penduduk", v: `${(d.penduduk / 10000).toFixed(1)} Juta`, c: "#8b5cf6" },
+                                { l: "Total Miskin", v: d.totalMiskin !== null ? `${fmt(d.totalMiskin)} jiwa` : "-", c: "#ef4444" },
+                              ].map(({ l, v, c }) => (
+                                <div key={l} style={{ background: "var(--gray-50)", borderRadius: 6, padding: "5px 8px", textAlign: "center" }}>
+                                  <div style={{ fontSize: 9.5, color: "var(--text-muted)", marginBottom: 2 }}>{l}</div>
+                                  <div style={{ fontSize: 11, fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, color: c }}>{v}</div>
+                                </div>
+                              ))}
+                            </div>
+                            <button onClick={() => handleRemove(key)} style={{ width: 24, height: 24, borderRadius: "50%", background: "var(--gray-100)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "var(--text-muted)", flexShrink: 0 }}>✕</button>
+                          </div>
+                        );
+                      })}
                     </div>
-                    <button className="btn btn-ghost" onClick={() => handleSelect(null, null)} style={{ fontSize: 11 }}>Tutup ✕</button>
                   </div>
                 )}
-                <ProvinceTable selectedKey={selectedKey} onSelect={handleSelect} />
+
+                <ProvinceTable selectedKeys={selectedKeys} onToggle={handleToggle} />
               </div>
             )}
           </main>
