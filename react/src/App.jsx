@@ -55,21 +55,62 @@ const GEOJSON_URL =
 const DATA_LOOKUP = {};
 RAW_DATA.forEach((d) => { DATA_LOOKUP[d.provinsi.toLowerCase()] = d; });
 
+// GeoJSON (ans-4175) memakai field "Propinsi" HURUF KAPITAL,
+// beberapa nama disambung tanpa spasi, mis: "NUSATENGGARA BARAT"
 const GEO_ALIASES = {
-  "kepulauan bangka belitung": "kep. bangka belitung",
-  "kepulauan riau": "kep. riau",
+  // NTB / NTT (disambung di GeoJSON)
+  "nusatenggara barat":         "nusa tenggara barat",
+  "nusatenggara timur":         "nusa tenggara timur",
+  "nusa tenggarabarat":         "nusa tenggara barat",
+  "nusa tenggaratimur":         "nusa tenggara timur",
+  // Kalimantan
+  "kalimantanbarat":            "kalimantan barat",
+  "kalimantantengah":           "kalimantan tengah",
+  "kalimantanselatan":          "kalimantan selatan",
+  "kalimantantimur":            "kalimantan timur",
+  "kalimantanutara":            "kalimantan utara",
+  // Sulawesi
+  "sulawesiutara":              "sulawesi utara",
+  "sulawesitengah":             "sulawesi tengah",
+  "sulawesiselatan":            "sulawesi selatan",
+  "sulawesitenggara":           "sulawesi tenggara",
+  "sulawesibarat":              "sulawesi barat",
+  // Sumatera
+  "sumaterautara":              "sumatera utara",
+  "sumaterabarat":              "sumatera barat",
+  "sumateraselatan":            "sumatera selatan",
+  // Kepulauan
+  "kepulauan bangka belitung":  "kep. bangka belitung",
+  "bangka belitung":            "kep. bangka belitung",
+  "kep bangka belitung":        "kep. bangka belitung",
+  "kepulauan riau":             "kep. riau",
+  "kep riau":                   "kep. riau",
+  // Yogyakarta
   "daerah istimewa yogyakarta": "di. yogyakarta",
-  "di yogyakarta": "di. yogyakarta",
-  yogyakarta: "di. yogyakarta",
-  "bangka belitung": "kep. bangka belitung",
-  "irian jaya barat": "papua barat",
+  "di yogyakarta":              "di. yogyakarta",
+  "diyogyakarta":               "di. yogyakarta",
+  "yogyakarta":                 "di. yogyakarta",
+  // DKI
+  "jakarta":                    "dki jakarta",
+  "dki":                        "dki jakarta",
+  // Papua
+  "irian jaya barat":           "papua barat",
+  "papuabarat":                 "papua barat",
+  // Singkatan
+  "ntb":                        "nusa tenggara barat",
+  "ntt":                        "nusa tenggara timur",
 };
 
 function resolveGeoName(rawName) {
   if (!rawName) return null;
-  const lower = rawName.toLowerCase().trim();
-  const aliased = GEO_ALIASES[lower] || lower;
-  return DATA_LOOKUP[aliased] ? aliased : null;
+  // Normalize: lowercase, trim, collapse whitespace
+  const lower = rawName.toLowerCase().trim().replace(/\s+/g, " ");
+  // 1. Cek alias
+  const aliased = GEO_ALIASES[lower];
+  if (aliased && DATA_LOOKUP[aliased]) return aliased;
+  // 2. Exact match
+  if (DATA_LOOKUP[lower]) return lower;
+  return null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -140,6 +181,8 @@ const ENRICHED_DATA = RAW_DATA.map((d) => {
 
 // Rebuild DATA_LOOKUP dengan data yang sudah enriched
 ENRICHED_DATA.forEach((d) => { DATA_LOOKUP[d.provinsi.toLowerCase()] = d; });
+
+// Populate fuzzy fallback keys (setelah DATA_LOOKUP terisi)
 
 // ═══════════════════════════════════════════════════════════════════════════
 // HELPERS
