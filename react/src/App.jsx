@@ -55,14 +55,10 @@ const GEOJSON_URL =
 const DATA_LOOKUP = {};
 RAW_DATA.forEach((d) => { DATA_LOOKUP[d.provinsi.toLowerCase()] = d; });
 
-// GeoJSON (ans-4175) memakai field "Propinsi" HURUF KAPITAL,
-// beberapa nama disambung tanpa spasi, mis: "NUSATENGGARA BARAT"
+
 const GEO_ALIASES = {
-  // NTB / NTT (disambung di GeoJSON)
+  // NTB 
   "nusatenggara barat":         "nusa tenggara barat",
-  "nusatenggara timur":         "nusa tenggara timur",
-  "nusa tenggarabarat":         "nusa tenggara barat",
-  "nusa tenggaratimur":         "nusa tenggara timur",
   // Kalimantan
   "kalimantanbarat":            "kalimantan barat",
   "kalimantantengah":           "kalimantan tengah",
@@ -815,14 +811,42 @@ export default function App() {
         <aside style={{ width: "var(--sidebar)", position: "fixed", top: 0, left: 0, height: "100vh", background: "#fff", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", zIndex: 40 }}>
           <div style={{ padding: "20px 16px 16px", borderBottom: "1px solid var(--border)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 34, height: 34, borderRadius: 9, background: "linear-gradient(135deg,#2563eb,#6366f1)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <span style={{ fontSize: 11, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>PD</span>
-              </div>
+              <img
+  src="/image.png"
+  alt="Logo Informasik"
+  style={{
+    width: 70,
+    height: 70,
+    objectFit: "contain",
+    flexShrink: 0,
+  }}
+/>
+
               <div>
-                <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)", letterSpacing: "-0.02em", lineHeight: 1.1 }}>Portal Data</div>
-                <div style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.2, marginTop: 1 }}>Analisis Kemiskinan 2025</div>
+                <div
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 800,
+                    color: "var(--text)",
+                    letterSpacing: "-0.02em",
+                    lineHeight: 1.1,
+                  }}
+                >
+                  Informasik
+                </div>
+
+                <div
+                  style={{
+                    fontSize: 10,
+                    color: "var(--text-muted)",
+                    lineHeight: 1.2,
+                    marginTop: 1,
+                  }}
+                >
+                  Informasi Garis Kemiskinan
+                </div>
               </div>
-            </div>
+</div>
           </div>
           <div style={{ padding: "12px 8px", flex: 1, overflowY: "auto" }}>
             <div className="section-label" style={{ paddingLeft: 4 }}>Menu Utama</div>
